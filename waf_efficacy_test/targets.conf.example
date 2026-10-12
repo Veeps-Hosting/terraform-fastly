@@ -1,0 +1,27 @@
+# Copy to targets.conf and fill in the temp URLs for each front-end you want to test.
+# Any config with an empty *_TARGET is skipped. This file is sourced by run_all.sh (shell syntax).
+#
+# *_OPTS takes extra per-config flags, e.g.:
+#   --host <vhost>                 send this Host/SNI (point a temp IP at the real vhost)
+#   --resolve <vhost>:<ip>         connect to <ip> but send <vhost> (like curl --resolve)
+#   --insecure                     skip TLS cert verification (staging/temp certs)
+
+RUNTAG="waf-$(date +%Y%m%d)"
+RATE="0.3"               # req/sec (keep low; ~3s spacing dodges the SafeLine 429 trap)
+
+# --- current production WAF (the baseline to beat) ---
+SAFELINE_TARGET="https://trial.example.com"
+SAFELINE_OPTS=""
+
+# --- origin only, no WAF (how much the nginx/Lucee rules catch alone) ---
+# the origin host; put its reachable IP in --resolve.
+DIRECT_TARGET="https://origin.example.com"
+DIRECT_OPTS="--host origin.example.com --resolve origin.example.com:CHANGE-ME-ORIGIN-IP --insecure"
+
+# --- Cloudflare WAF trial on a temp URL ---
+CLOUDFLARE_TARGET=""
+CLOUDFLARE_OPTS=""
+
+# --- Fastly (Next-Gen WAF / SigSci) trial on a temp URL ---
+FASTLY_TARGET=""
+FASTLY_OPTS=""

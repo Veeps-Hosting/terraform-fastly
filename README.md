@@ -32,3 +32,4 @@ Requires OpenTofu >= 1.12.0 and provider `fastly/fastly ~> 9.8`. Pin a tag in le
 | [`docs/virtual-patches-assessment.md`](docs/virtual-patches-assessment.md) | How Fastly NGWAF virtual patches work + a tiered CVE recommendation for a JVM/ColdFusion origin. |
 | [`docs/variables.md`](docs/variables.md) | Full input reference (generated from `service/variables.tf`). |
 | [`examples/trial.hcl`](examples/trial.hcl) | A sanitized Terragrunt leaf for a staging trial. |
+| [`waf_efficacy_test/`](waf_efficacy_test/) | The benign WAF efficacy / bypass-rate replay harness (the two-vantage comparison). |

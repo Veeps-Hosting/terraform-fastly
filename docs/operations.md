@@ -45,6 +45,16 @@ Once Fastly is the sole front for the trial names and graded clean, in one revie
 Fastly now owns (origin rate-limits, the incumbent-WAF allow, a double HSTS). Keep the IP + secret gates. See
 `docs/origin-wiring.md`.
 
+> **Do NOT assume every origin control is duplicate.** A semantic WAF blocks injection *payloads* (SQLi/XSS/cmd) but
+> may pass bare *path*-based attacks (admin consoles, dotfiles, known-vuln script paths) that an origin **path
+> denylist** catches. Measured on a representative preprod site: of 58 benign attack-pattern probes, **13 passed the
+> semantic WAF but were blocked by the origin's path denylist** (admin-console paths, `/.env`/`/.aws`, WP probes,
+> phpMyAdmin/phpunit, traversal on `index.php`). That denylist is **not** duplicate — it is defence-in-depth for
+> exactly what the semantic WAF forwards. Before removing it, **verify the Fastly path rules cover those categories**:
+> enable the module's custom block rules (`cfadmin`, `credhunt`, `wpprobe`, `phpdiscovery`, `scannerpath`,
+> `encoded_trav`), replay-test from both outside (via the WAF) and against the origin, and confirm the previously
+> origin-only blocks are now caught at the edge. Only then drop the origin denylist.
+
 ## Production cutover (separate, gated)
 
 Only after staging is proven: build a production leaf (prod domains, prod origin), repeat log→grade→block→ramp on a

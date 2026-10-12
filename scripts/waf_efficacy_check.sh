@@ -18,7 +18,7 @@ set -euo pipefail
 TARGET="${1:-}"; shift || true
 HOST=""
 BASELINE_BYPASS="0.2"
-HARNESS="${WAF_EFFICACY_DIR:-}"
+HARNESS="${WAF_EFFICACY_DIR:-$(cd "$(dirname "$0")/.." && pwd)/waf_efficacy_test}"
 EXTRA=()
 
 while [[ $# -gt 0 ]]; do

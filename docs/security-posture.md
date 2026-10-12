@@ -38,6 +38,16 @@ deliberately set well above a shared office-NAT IP's incidental noise.
 | high-cost endpoint cache-buster abuse | **VCL cache-key normalization** (opt-in, primary) + NGWAF rate limit (backstop) | high |
 | origin-direct bypass | Fastly-IP allowlist **+** shared-secret header (origin 403s on mismatch) | high |
 
+### Why the custom path rules matter (measured)
+
+A semantic WAF (incumbent-class) scores injection *payloads* — SQLi/XSS/cmd in params and bodies — and blocks those
+inline. It does **not** flag a bare attack *path* (e.g. `GET /wp-login.php`, `/.env`, `/CFIDE/administrator/`) because
+there is no injection signature in it. On a representative preprod site, **13 of 58** benign attack-pattern probes
+passed the semantic WAF untouched and were caught only by the origin's own path denylist. The module's custom block
+rules (`cfadmin`, `credhunt`, `wpprobe`, `phpdiscovery`, `scannerpath`, `encoded_trav`) exist to close exactly that
+gap at the edge — so the origin path denylist can be retired *after* these are enabled and replay-verified, not
+before (see `docs/operations.md` Stage 4 and `docs/origin-wiring.md`).
+
 ## Defence in depth (layers)
 
 1. **Fastly edge** — NGWAF inline block + rate limits + virtual patches + TLS termination + cache.

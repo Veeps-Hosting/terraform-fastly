@@ -67,7 +67,15 @@ and graded clean, retire the origin controls the WAF now owns, in one reviewed c
 | origin rate-limits (e.g. `limit_req` zones) | Fastly NGWAF `rate_limit` rules own rate limiting | remove |
 | an incumbent WAF's origin allow/trust | that WAF no longer fronts these names | remove |
 | origin bot/UA/geo blocking | NGWAF system signals + scanner rules own it | evaluate; drop if duplicate |
+| origin **path denylist** (admin consoles, dotfiles, script-file paths) | **NOT duplicate** — a semantic WAF passes bare attack *paths* | **keep until the WAF's path rules are verified to cover it**, then remove |
 | origin `Strict-Transport-Security` | the Fastly service also sets HSTS | keep one, not both |
+
+> **Measured warning.** A semantic WAF catches injection payloads but forwards bare attack *paths*. On a
+> representative preprod site, 13 of 58 attack-pattern probes passed the semantic WAF and were caught **only** by the
+> origin's path denylist (admin consoles, `/.env`, `/.aws`, `/wp-login.php`, `/xmlrpc.php`, phpMyAdmin, phpunit,
+> traversal on `index.php`). Removing that denylist before the edge WAF covers those paths re-opens the exact gap it
+> closes. The module's `cfadmin`/`credhunt`/`wpprobe`/`phpdiscovery`/`scannerpath`/`encoded_trav` rules exist for
+> this; enable and replay-verify them first.
 
 **Keep** at the origin even behind Fastly (defence in depth, not duplicate): the IP gate, the secret gate, realip,
 TLS, and the application config. **Do not** strip the IP/secret gates.
