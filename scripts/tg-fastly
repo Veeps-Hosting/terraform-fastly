@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Run terragrunt for a terraform-fastly leaf.
+#   usage: tg-fastly plan | tg-fastly apply | tg-fastly <any terragrunt args>
+#
+# Thin passthrough by default. If the FASTLY_API_KEY in use is IP-allowlisted to the deploy host's IPv4 address (as the
+# Cloudflare tokens are), export TG_FORCE_V4=1 to route all HTTPS egress through a throwaway local IPv4-only
+# CONNECT proxy (same mechanism as terraform-cloudflare scripts/tg-cf). Most Fastly tokens are not IP-pinned, so the
+# default is a straight passthrough.
+set -euo pipefail
+
+here=$(dirname "$(readlink -f "$0")")
+
+if [[ "${TG_FORCE_V4:-0}" == "1" ]]; then
+  port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+  python3 "$here/v4proxy.py" "$port" >/dev/null 2>&1 &
+  proxy_pid=$!
+  trap 'kill $proxy_pid 2>/dev/null' EXIT
+  for _ in $(seq 50); do
+    (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && break
+    sleep 0.1
+  done
+  HTTPS_PROXY="http://127.0.0.1:$port" NO_PROXY="" terragrunt "$@"
+else
+  terragrunt "$@"
+fi
